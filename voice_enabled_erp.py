@@ -217,3 +217,34 @@ Are you sure you want to proceed?"""
 
         df.to_csv("requests.csv", mode="a", header=False, index=False)
         return "Request saved successfully"
+
+def create_interface():
+    assistant = ERPAssistant()
+    last_request = {"text": None, "missing_field": None}
+
+    def process(audio, text):
+        # nonlocal last_request
+        recognized_text, response, show_confirm, missing_field = assistant.process_input(audio, text)
+        last_request["text"] = recognized_text
+        last_request["missing_field"] = missing_field
+
+        if missing_field:
+            return (
+                recognized_text,
+                f"Please speak the {missing_field}",
+                gr.update(visible=False),
+                gr.update(visible=True)
+            )
+        return(
+            recognized_text,
+            response,
+            gr.update(visible=False),
+            gr.update(visible=True)
+        )
+
+    def handle_addition_input(audio, text):
+        # nonlocal last_request
+        if audio:  # Handling voice input
+            with sr.AudioFile(audio) as source:
+                audio_text = assistant.recognizer.recognize_whisper(assistant.recognizer.record(source))
+                full_text = last_request["text"]
