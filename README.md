@@ -73,7 +73,6 @@ Ensure you have Python installed on your system. You can download it from [pytho
 ### Usage
 
 - **Voice Input**: Click on the microphone icon to record your voice input.
-- **Text Input**: Type your request in the text input box.
 - **Submit**: Click the "Submit" button to process your input.
 - **Clear**: Click the "Clear" button to reset the input fields.
 
