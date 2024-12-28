@@ -3,7 +3,6 @@ import pandas as pd
 import speech_recognition as sr
 from dataclasses import dataclass
 from transformers import pipeline
-import os
 import warnings
 
 # Suppressing deprecation warnings
