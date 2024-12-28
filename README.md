@@ -81,7 +81,3 @@ Ensure you have Python installed on your system. You can download it from [pytho
 
 - "I need to request money for project 223 to buy some tools the amount I need is 500 riyals"
 - "I need to request money for project to buy some tools the amount I need is 50 riyals"
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
