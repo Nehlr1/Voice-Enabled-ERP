@@ -3,6 +3,11 @@ import pandas as pd
 import speech_recognition as sr
 from dataclasses import dataclass
 from transformers import pipeline
+import os
+import warnings
+
+# Suppressing deprecation warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 @dataclass
 class MoneyRequest:
@@ -17,6 +22,10 @@ class MoneyRequest:
     reason = None
 
 class ERPAssistant:
+    """
+    A class that handles the processing of money requests through voice or text input.
+    Uses transformer models for enhanced natural language processing.
+    """
     def __init__(self):
         self.recognizer = sr.Recognizer()
         # Initializing the transformer models
@@ -24,7 +33,11 @@ class ERPAssistant:
         self.qa_pipeline = pipeline("question-answering", model="deepset/roberta-base-squad2")
         self.zero_shot = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
         
-    def _extract_project_id(self, text):
+    def extract_project_id(self, text):
+        """
+        Extracts project identifier from input text using NER and fallback logic.
+        Returns the project ID/name or None if not found.
+        """
         if "project" not in text.lower():
             return None
             
@@ -56,10 +69,15 @@ class ERPAssistant:
         except:
             return None
 
-    def _extract_amount(self, text):
+    def extract_amount(self, text):
+        """
+        Extracts the requested amount from input text using QA model.
+        Returns the amount as float or None if not found.
+        """
         try:
             # Using QA model to find amount
-            question = "How many riyals are requested?"
+            # question = "How many riyals are requested?"
+            question = "How much money is requested?"
             result = self.qa_pipeline(question=question, context=text)
             
             # Trying to extract number from QA result
@@ -68,20 +86,14 @@ class ERPAssistant:
             if numbers:
                 return float(numbers)
             
-            # If no QA results, checking for keywords
-            words = text.lower().split()
-            for i, word in enumerate(words):
-                if word.isdigit():
-                    if i + 1 < len(words) and "riyal" in words[i + 1].lower():
-                        # Making sure this number isn't a project number
-                        project_part = text.split("project")[1].split() if "project" in text else []
-                        if not (project_part and word in project_part[:2]):
-                            return float(word)
-            return None
         except:
             return None
 
-    def _extract_reason(self, text):
+    def extract_reason(self, text):
+        """
+        Extracts the reason for the request using zero-shot classification.
+        Categorizes the reason and returns formatted string or None if not found.
+        """
         try:
             if "buy" not in text.lower():
                 return None
@@ -99,18 +111,16 @@ class ERPAssistant:
             result = self.zero_shot(buy_part.strip(), categories)
             top_category = result["labels"][0]
             
-            return f"{top_category}: buy {buy_part.strip()}"
+            return f"buy {buy_part.strip()} for the project ({top_category})"
+        
         except:
-            # If no zero-shot results, checking for keywords
-            if "buy" in text.lower():
-                buy_part = text.lower().split("buy")[1]
-                for splitter in ["and", "the amount", "i need"]:
-                    if splitter in buy_part:
-                        buy_part = buy_part.split(splitter)[0]
-                return f"buy {buy_part.strip()} for the project"
             return None
 
     def _get_confidence(self, field, value):
+        """
+        Calculates confidence score for extracted field values.
+        Returns float between 0 and 1 indicating confidence level.
+        """
         # Confidence scoring
         if value is None:
             return 0.0
@@ -123,6 +133,10 @@ class ERPAssistant:
         return 0.5
 
     def process_input(self, audio_path=None, text_input=None):
+        """
+        Processes either audio or text input to extract request details.
+        Returns tuple of (recognized_text, response, show_confirm, missing_field).
+        """
         if audio_path:
             try:
                 with sr.AudioFile(audio_path) as source:
@@ -166,13 +180,17 @@ class ERPAssistant:
         return text_input, confirmation, True, None
 
     def process_request(self, text):
+        """
+        Creates and populates a MoneyRequest object from input text.
+        Returns MoneyRequest with extracted fields based on confidence threshold.
+        """
         request = MoneyRequest()
         
         # Extracting all fields
         results = {
-            "project_id": self._extract_project_id(text),
-            "amount": self._extract_amount(text),
-            "reason": self._extract_reason(text)
+            "project_id": self.extract_project_id(text),
+            "amount": self.extract_amount(text),
+            "reason": self.extract_reason(text)
         }
         
         # Calculating confidence scores
@@ -189,14 +207,11 @@ class ERPAssistant:
         
         return request
 
-    def validate_request(self, request):
-        return {
-            "project": bool(request.project_id),
-            "amount": bool(request.amount),
-            "reason": bool(request.reason)
-        }
-
     def generate_confirmation_message(self, request):
+        """
+        Generates a confirmation message for the user to review the request.
+        Returns formatted string with request details.
+        """
         return f"""You are going to add request money for
 project: {request.project_id}
 request amount: {request.amount}
@@ -204,26 +219,35 @@ reason: {request.reason}
 Are you sure you want to proceed?"""
 
     def confirm_and_save(self, text_input):
+        """
+        Saves the confirmed request to a CSV file.
+        Returns success or failure message.
+        """
         if not text_input:
             return "No request to confirm"
             
         request = self.process_request(text_input)
         
         df = pd.DataFrame({
-            'project': [request.project_id],
-            'request_amount': [request.amount],
-            'reason': [request.reason]
+            "project": [request.project_id],
+            "request_amount": [request.amount],
+            "reason": [request.reason],
+            "timestamp": [pd.Timestamp.now()]
         })
         
-        df.to_csv("requests.csv", mode='a', header=False, index=False)
+        df.to_csv("requests.csv", mode="a", header=True, index=False)
         return "Request saved successfully!"
 
 def create_interface():
+    """
+    Creates and configures the Gradio interface for the ERP Assistant.
+    Returns configured Gradio interface object with all necessary components
+    and event handlers for voice/text input processing.
+    """
     assistant = ERPAssistant()
     last_request = {"text": None, "missing_field": None}
     
     def process(audio, text):
-        # nonlocal last_request
         recognized_text, response, show_confirm, missing_field = assistant.process_input(audio, text)
         last_request["text"] = recognized_text
         last_request["missing_field"] = missing_field
@@ -243,7 +267,6 @@ def create_interface():
         )
     
     def handle_additional_input(audio, text):
-        # nonlocal last_request
         if audio:  # Handling voice input
             with sr.AudioFile(audio) as source:
                 try:
@@ -285,7 +308,7 @@ def create_interface():
         return "", "Invalid input", gr.update(visible=True), gr.update(visible=False)
 
     with gr.Blocks(theme=gr.themes.Base()) as interface:
-        gr.Markdown("## Voice-Enabled ERP Assistant")
+        gr.Markdown("# Voice-Enabled ERP Assistant")
         gr.Markdown("Speak or type your request to create a money request for your project.")
         
         with gr.Row():
