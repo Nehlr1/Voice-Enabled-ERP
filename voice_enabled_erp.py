@@ -75,7 +75,6 @@ class ERPAssistant:
         """
         try:
             # Using QA model to find amount
-            # question = "How many riyals are requested?"
             question = "How much money is requested?"
             result = self.qa_pipeline(question=question, context=text)
             
